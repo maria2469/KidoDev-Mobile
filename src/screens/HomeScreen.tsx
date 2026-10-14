@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,229 +7,544 @@ import {
   Image,
   TouchableOpacity,
   SafeAreaView,
-  StatusBar,
   Dimensions,
   Platform,
+  Modal,
 } from 'react-native';
+import { Video, ResizeMode } from 'expo-av';
+import { LinearGradient } from 'expo-linear-gradient';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { RootStackParamList } from '../navigation/NavigationTypes';
-import { curriculum } from '../data/curriculum';
 
 const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
+/* TEAM DATA FROM WEB */
+const TEAM_MEMBERS = [
+  {
+    id: 'dr-zeeshan',
+    name: 'Dr. Muhammad Zeeshan Asaf',
+    role: 'Lead Academic Advisor & Curriculum Specialist',
+    badge: 'ACADEMIC LEADERSHIP',
+    image: require('../../assets/no_bg_output/sir_zeeshan.webp'),
+    accent: '#0284C7',
+    bio: 'Directs curriculum strategy, structured learning pacing, and algorithmic pedagogy to ensure young minds grasp computational logic with ease.',
+  },
+  {
+    id: 'muteeb-ramzan',
+    name: 'M. Muteeb Ramzan',
+    role: 'Chief Architect & Founder of Code Nexus',
+    badge: 'PLATFORM ARCHITECTURE',
+    image: require('../../assets/no_bg_output/muteeb_ramzan.webp'),
+    accent: '#4F46E5',
+    bio: 'Leads the core platform architecture and interactive engine development, creating high-speed, child-safe environments tailored for young creators.',
+  },
+  {
+    id: 'laiba-sarwar',
+    name: 'Laiba Sarwar',
+    role: 'Founder & Chief Executive Officer',
+    badge: 'EXECUTIVE LEADERSHIP',
+    image: require('../../assets/no_bg_output/laiba_sarwar.webp'),
+    accent: '#DB2777',
+    bio: 'Spearheads the mission, product roadmap, and global vision of Kido Dev to make high-quality, friendly coding education accessible to all learners.',
+  },
+  {
+    id: 'maria-noor',
+    name: 'Maria Noor',
+    role: 'Lead Developer & Interactive Designer',
+    badge: 'ENGINEERING & DESIGN',
+    image: require('../../assets/no_bg_output/maria_noor.webp'),
+    accent: '#8B5CF6',
+    bio: 'Crafts the interactive magic studio, visual drag-and-drop engines, and gamified animations powering the Kido Dev learner experience.',
+  },
+  {
+    id: 'laiba-noor',
+    name: 'Laiba Noor',
+    role: 'Lead Pedagogical Designer',
+    badge: 'PEDAGOGY & CURRICULUM',
+    image: require('../../assets/no_bg_output/laiba_noor.webp'),
+    accent: '#10B981',
+    bio: 'Designs child-centered pedagogical pathways, micro-challenges, and cognitive progression maps that turn complex syntax into playful discoveries.',
+  },
+];
+
+/* HOW IT WORKS STEPS FROM WEB */
+const HOW_STEPS = [
+  {
+    num: '1',
+    title: 'Pick a Mission',
+    text: "Choose a game you want to build. From 'Flappy Bird' clones to 'Space Invaders'.",
+    color: '#FF5F5F',
+  },
+  {
+    num: '2',
+    title: 'Follow the Light',
+    text: 'Our magic overlay dims the screen and highlights exactly which block to grab.',
+    color: '#4FB5FF',
+  },
+  {
+    num: '3',
+    title: 'Snap & Learn',
+    text: "Drag the block. If it's right, it snaps with a satisfying click and you get XP!",
+    color: '#67E032',
+  },
+  {
+    num: '4',
+    title: 'Play Just Built',
+    text: 'Hit the Green Flag. You just built a real working game. Now share it with friends.',
+    color: '#E0329E',
+  },
+];
+
+/* SYLLABUS LEVELS FROM WEB */
+const SYLLABUS_LEVELS = [
+  {
+    level: 1,
+    title: 'Coding Foundations & Logic',
+    difficulty: 'Introductory',
+    badge: 'STEP 01',
+    accent: '#0284C7',
+    desc: 'Introduce young minds to visual block programming, spatial sequences, and algorithmic logic through joyful creative play.',
+    topics: ['Visual Block Sequencing', 'Basic Event Triggers', 'Character Coordinates', 'Problem-Solving Logic'],
+  },
+  {
+    level: 2,
+    title: 'Loops, Timing & Animation',
+    difficulty: 'Foundation',
+    badge: 'STEP 02',
+    accent: '#16A34A',
+    desc: 'Understand repetition, automated cycles, and timed choreography to build dynamic multi-character digital worlds.',
+    topics: ['Repeat & Forever Loops', 'Timer & Delay Synchronization', 'Costume Animation Switching', 'Sound Event Binding'],
+  },
+  {
+    level: 3,
+    title: 'Conditionals & Decision Logic',
+    difficulty: 'Intermediate',
+    badge: 'STEP 03',
+    accent: '#D97706',
+    desc: 'Equip young programmers with If/Else logic, sensing boundaries, and responsive keyboard/mouse player controls.',
+    topics: ['If / Else Decision Trees', 'Color & Edge Collision Sensing', 'Keyboard Controls', 'Score Tracking Counters'],
+  },
+  {
+    level: 4,
+    title: 'Advanced Game Architecture',
+    difficulty: 'Advanced',
+    badge: 'STEP 04',
+    accent: '#8B5CF6',
+    desc: 'Combine player physics, enemy intelligence, multi-level win states, and variable lives into full-fledged arcade games.',
+    topics: ['Collision Physics', 'Enemy Artificial Logic', 'Health & Lives System', 'Win & Game Over States'],
+  },
+  {
+    level: 5,
+    title: 'Audio Synthesis & Sound Engineering',
+    difficulty: 'Mastery',
+    badge: 'STEP 05',
+    accent: '#EF4444',
+    desc: 'Transform games with procedural music, sound effect triggers, tempo modulation, and live interactive soundboards.',
+    topics: ['Synthesizer Notes', 'Drum Patterns', 'Tempo Modulation', 'Volume & Audio Controls'],
+  },
+];
+
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors, assets, theme, toggleTheme } = useTheme();
-  const { role, childProfile, logout } = useAuth();
+  const { role, childProfile } = useAuth();
 
-  const handleStartAdventure = () => {
-    if (role === 'kid' || role === 'parent') {
-      navigation.navigate('Levels');
-    } else {
-      navigation.navigate('Auth');
-    }
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleStartMission = () => {
+    navigation.navigate('Levels');
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={theme === 'forest' ? 'light-content' : 'dark-content'} backgroundColor={colors.primary} />
-      
-      {/* TOP NAVBAR */}
-      <View style={[styles.navbar, { backgroundColor: colors.navbar_bg }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: '#0B0F19' }]}>
+      {/* ──────────────────────────────────────────
+          1. THE WONDERBAR (NAVBAR)
+      ────────────────────────────────────────── */}
+      <View style={styles.wonderbar}>
         <View style={styles.navLeft}>
           <Image source={assets.logo} style={styles.logo} resizeMode="contain" />
-          <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <FontAwesome5 name="sparkles" size={10} color="#fff" />
-            <Text style={styles.badgeText}>Kids Coding</Text>
-          </View>
         </View>
 
         <View style={styles.navRight}>
-          {/* Theme Toggle Button */}
-          <TouchableOpacity
-            style={[styles.themeBtn, { borderColor: colors.accent }]}
-            onPress={toggleTheme}
-            activeOpacity={0.8}
-          >
-            <FontAwesome5
-              name={theme === 'forest' ? 'tree' : 'water'}
-              size={16}
-              color={colors.accent}
-            />
-            <Text style={[styles.themeBtnText, { color: colors.accent }]}>
-              {theme === 'forest' ? 'Forest' : 'Aqua'}
-            </Text>
+          {/* THEME TOGGLE */}
+          <TouchableOpacity style={styles.themePillBtn} onPress={toggleTheme} activeOpacity={0.8}>
+            <FontAwesome5 name={theme === 'forest' ? 'tree' : 'water'} size={13} color="#00E5FF" />
+            <Text style={styles.themePillText}>{theme === 'forest' ? 'Forest' : 'Aqua'}</Text>
           </TouchableOpacity>
 
-          {/* User profile or Auth button */}
-          {role ? (
-            <TouchableOpacity
-              style={[styles.userPill, { backgroundColor: colors.secondary }]}
-              onPress={() => navigation.navigate(role === 'parent' ? 'ParentDashboard' : 'Levels')}
-            >
-              <FontAwesome5 name={role === 'kid' ? 'gamepad' : 'user-shield'} size={14} color="#000" />
-              <Text style={styles.userPillText}>
-                {role === 'kid' ? childProfile?.name || 'Explorer' : 'Dashboard'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: colors.primary }]}
-              onPress={() => navigation.navigate('Auth')}
-            >
-              <Text style={styles.loginBtnText}>Log In</Text>
-            </TouchableOpacity>
-          )}
+          {/* HAMBURGER MENU BUTTON */}
+          <TouchableOpacity
+            style={styles.menuBtn}
+            onPress={() => setMobileMenuOpen(true)}
+            activeOpacity={0.8}
+          >
+            <FontAwesome5 name="bars" size={16} color="#fff" />
+          </TouchableOpacity>
+
+          {/* USER OR START CTA */}
+          <TouchableOpacity
+            style={styles.navCtaBtn}
+            onPress={handleStartMission}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.navCtaText}>
+              {role === 'kid' ? childProfile?.name || 'Explorer' : 'Playland'}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* HERO SECTION */}
-        <View style={[styles.heroContainer, isTablet && styles.heroTablet]}>
-          <View style={styles.heroTextContainer}>
-            <View style={styles.superTag}>
-              <FontAwesome5 name="rocket" size={12} color={colors.accent} />
-              <Text style={[styles.superTagText, { color: colors.accent }]}>GAMIFIED ADVENTURE</Text>
+      {/* MOBILE DRAWER MODAL */}
+      <Modal visible={mobileMenuOpen} transparent animationType="fade">
+        <View style={styles.drawerOverlay}>
+          <View style={styles.drawerContent}>
+            <View style={styles.drawerHeader}>
+              <Image source={assets.logo} style={styles.drawerLogo} resizeMode="contain" />
+              <TouchableOpacity onPress={() => setMobileMenuOpen(false)}>
+                <FontAwesome5 name="times" size={20} color="#fff" />
+              </TouchableOpacity>
             </View>
-            <Text style={[styles.heroTitle, { color: colors.text_dark }]}>
-              Code. Play.{'\n'}
-              <Text style={{ color: colors.primary }}>Create Magic!</Text>
-            </Text>
-            <Text style={[styles.heroSubtitle, { color: colors.text_muted }]}>
-              The interactive block-coding universe for kids. Solve fun puzzles, build animations, and explore vibrant island maps!
-            </Text>
 
-            {/* ACTION BUTTONS */}
-            <View style={styles.ctaRow}>
+            <View style={styles.drawerLinks}>
               <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                onPress={handleStartAdventure}
-                activeOpacity={0.85}
+                style={styles.drawerLinkItem}
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  navigation.navigate('Home');
+                }}
               >
-                <FontAwesome5 name="play" size={16} color="#fff" />
-                <Text style={styles.primaryBtnText}>
-                  {role ? 'CONTINUE QUEST' : 'LAUNCH PLAYLAND'}
-                </Text>
+                <FontAwesome5 name="home" size={18} color="#0EA5E9" style={styles.drawerLinkIcon} />
+                <Text style={styles.drawerLinkText}>Home</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.secondaryBtn, { borderColor: colors.primary, backgroundColor: colors.card_bg }]}
-                onPress={() => navigation.navigate('GamesHub')}
-                activeOpacity={0.85}
+                style={styles.drawerLinkItem}
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  navigation.navigate('Levels');
+                }}
               >
-                <FontAwesome5 name="gamepad" size={16} color={colors.primary} />
-                <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>MINI-GAMES</Text>
+                <FontAwesome5 name="map-marked-alt" size={18} color="#10B981" style={styles.drawerLinkIcon} />
+                <Text style={styles.drawerLinkText}>Adventure Islands (Levels)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerLinkItem}
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  navigation.navigate('GamesHub');
+                }}
+              >
+                <FontAwesome5 name="gamepad" size={18} color="#F59E0B" style={styles.drawerLinkIcon} />
+                <Text style={styles.drawerLinkText}>Mini-Games Hub</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.drawerLinkItem}
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  navigation.navigate('Auth');
+                }}
+              >
+                <FontAwesome5 name="user" size={18} color="#8B5CF6" style={styles.drawerLinkIcon} />
+                <Text style={styles.drawerLinkText}>{role ? 'Dashboard' : 'Login / Passport'}</Text>
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* HERO MASCOT ILLUSTRATION */}
-          <View style={styles.heroImageWrapper}>
-            <Image source={assets.hero} style={styles.heroImage} resizeMode="contain" />
-            <View style={[styles.floatingBadge, styles.starBadge, { backgroundColor: colors.secondary }]}>
-              <FontAwesome5 name="star" size={16} color="#000" />
-              <Text style={styles.floatingBadgeText}>Fun!</Text>
-            </View>
-            <View style={[styles.floatingBadge, styles.aiBadge, { backgroundColor: colors.accent }]}>
-              <FontAwesome5 name="robot" size={16} color="#fff" />
-              <Text style={[styles.floatingBadgeText, { color: '#fff' }]}>AI Tutor</Text>
-            </View>
-          </View>
         </View>
+      </Modal>
 
-        {/* 3 CORE FEATURE CARDS */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text_dark }]}>Why Kids Love Kido Dev</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text_muted }]}>Designed specially for hands-on, zero-stress learning</Text>
-        </View>
+      <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
+        {/* ──────────────────────────────────────────
+            2. HERO SECTION (WITH 3D VIDEO BACKGROUND)
+        ────────────────────────────────────────── */}
+        <View style={styles.heroSection}>
+          {/* Background Video */}
+          <Video
+            source={require('../../assets/videos/herovideo.mp4')}
+            style={StyleSheet.absoluteFill}
+            resizeMode={ResizeMode.COVER}
+            shouldPlay
+            isLooping
+            isMuted
+          />
 
-        <View style={[styles.featuresGrid, isTablet && styles.featuresTablet]}>
-          <View style={[styles.featureCard, { borderColor: '#E2E8F0', backgroundColor: colors.card_bg }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(14, 165, 233, 0.15)' }]}>
-              <FontAwesome5 name="puzzle-piece" size={26} color="#0EA5E9" />
+          {/* Dark Overlay for Text Readability (matching web .hero-dark-overlay) */}
+          <View style={styles.heroDarkOverlay} />
+
+          {/* Hero Content */}
+          <View style={styles.heroContentWrapper}>
+            <View style={styles.heroTaglinePill}>
+              <Text style={styles.heroTaglineText}>THE PREMIER GAMIFIED PLATFORM</Text>
             </View>
-            <Text style={styles.featureTitle}>Block Magic</Text>
-            <Text style={styles.featureDesc}>
-              Snap colourful coding blocks together like digital Lego. No syntax errors, just pure creativity.
+
+            {/* Exact Web Title: Learn Coding the Easy & Best Way! */}
+            <Text style={styles.heroTitle}>
+              Learn Coding the{
+}
+              <Text style={{ color: '#00FF66' }}>Easy</Text> & <Text style={{ color: '#FF007F' }}>Best</Text> Way!
             </Text>
-          </View>
 
-          <View style={[styles.featureCard, { borderColor: '#E2E8F0', backgroundColor: colors.card_bg }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-              <FontAwesome5 name="map-marked-alt" size={26} color="#F59E0B" />
-            </View>
-            <Text style={styles.featureTitle}>Island Maps</Text>
-            <Text style={styles.featureDesc}>
-              Progress through dynamic story levels, earn medals, open treasure chests, and gain XP.
-            </Text>
-          </View>
-
-          <View style={[styles.featureCard, { borderColor: '#E2E8F0', backgroundColor: colors.card_bg }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-              <FontAwesome5 name="cat" size={26} color="#8B5CF6" />
-            </View>
-            <Text style={styles.featureTitle}>Kido AI Companion</Text>
-            <Text style={styles.featureDesc}>
-              Our friendly animated cat guide gently highlights hints when your child gets stuck.
-            </Text>
-          </View>
-        </View>
-
-        {/* CURRICULUM PREVIEW */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text_dark }]}>Curriculum Road Map</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text_muted }]}>10 exciting milestone levels from Rookie to Champion</Text>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.curriculumRow}>
-          {curriculum.map((item, idx) => (
+            {/* Exact Web CTA Button: Start Your Mission */}
             <TouchableOpacity
-              key={item.id}
-              style={[styles.curriculumCard, { backgroundColor: colors.card_bg }]}
-              onPress={handleStartAdventure}
-              activeOpacity={0.9}
+              style={styles.heroVibrantBtn}
+              onPress={handleStartMission}
+              activeOpacity={0.88}
             >
-              <View style={[styles.curriculumBadge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.curriculumBadgeText}>LEVEL {item.level}</Text>
+              <LinearGradient
+                colors={['#0EA5E9', '#8B5CF6']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroBtnGradient}
+              >
+                <Text style={styles.heroBtnText}>START YOUR MISSION</Text>
+                <FontAwesome5 name="rocket" size={16} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ──────────────────────────────────────────
+            3. FEATURES SECTION (WHY KIDO DEV? BENTO GRID)
+        ────────────────────────────────────────── */}
+        <View style={styles.featuresSection}>
+          <View style={styles.sectionHeaderCenter}>
+            <View style={styles.shineBadge}>
+              <Text style={styles.shineBadgeText}>WHY KIDO DEV?</Text>
+            </View>
+            <Text style={styles.featuresTitle}>
+              Learning <Text style={{ color: '#FACC15' }}>Reimagined</Text>{
+}
+              <Text style={{ color: '#00F5D4' }}>For Gen Alpha</Text>
+            </Text>
+          </View>
+
+          {/* BENTO CARD 1: AI Agent Enabled Platform (Video 2) */}
+          <View style={styles.bentoCard}>
+            <Video
+              source={require('../../assets/videos/video2.mp4')}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isLooping
+              isMuted
+            />
+            <View style={styles.bentoDarkOverlay} />
+            <View style={styles.bentoContent}>
+              <View style={[styles.bentoIconCircle, { backgroundColor: 'rgba(239, 68, 68, 0.4)' }]}>
+                <FontAwesome5 name="robot" size={24} color="#EF4444" />
               </View>
-              <Text style={styles.curriculumCardTitle}>{item.title.replace(/^Level \d+:\s*/, '')}</Text>
-              <Text style={styles.curriculumCardDesc}>{item.description}</Text>
-              <View style={styles.topicsList}>
-                {item.topics.slice(0, 3).map((t, tidx) => (
-                  <View key={tidx} style={styles.topicPill}>
-                    <FontAwesome5 name="check-circle" size={10} color={colors.primary} />
-                    <Text style={styles.topicText}>{t}</Text>
+              <Text style={styles.bentoCardTitle}>AI Agent Enabled Platform</Text>
+              <Text style={styles.bentoCardDesc}>
+                Learn the base of coding from the ground up and master it perfectly with your personal AI mentor.
+              </Text>
+            </View>
+          </View>
+
+          {/* BENTO CARD 2: Visual Block Masterclass (Video 1) */}
+          <View style={styles.bentoCard}>
+            <Video
+              source={require('../../assets/videos/video1.mp4')}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isLooping
+              isMuted
+            />
+            <View style={styles.bentoDarkOverlay} />
+            <View style={styles.bentoContent}>
+              <View style={[styles.bentoIconCircle, { backgroundColor: 'rgba(14, 165, 233, 0.4)' }]}>
+                <FontAwesome5 name="rocket" size={24} color="#0EA5E9" />
+              </View>
+              <Text style={styles.bentoCardTitle}>Visual Block Masterclass</Text>
+              <Text style={styles.bentoCardDesc}>
+                Snap together colorful blocks to create code. It's like building with LEGOs, but for computer programs!
+              </Text>
+              <TouchableOpacity style={styles.bentoBtn} onPress={handleStartMission}>
+                <Text style={styles.bentoBtnText}>Unlock Power</Text>
+                <FontAwesome5 name="arrow-right" size={12} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* BENTO CARD 3: Create Games & Local Stories (Video 3) */}
+          <View style={styles.bentoCard}>
+            <Video
+              source={require('../../assets/videos/video3.mp4')}
+              style={StyleSheet.absoluteFill}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay
+              isLooping
+              isMuted
+            />
+            <View style={styles.bentoDarkOverlay} />
+            <View style={styles.bentoContent}>
+              <View style={[styles.bentoIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.4)' }]}>
+                <FontAwesome5 name="gamepad" size={24} color="#10B981" />
+              </View>
+              <Text style={styles.bentoCardTitle}>Create Games & Local Stories</Text>
+              <Text style={styles.bentoCardDesc}>
+                Design your own characters (Sprites), animate them, and share your adventures with the whole world.
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ──────────────────────────────────────────
+            4. KIDOBOT COMPANION SECTION
+        ────────────────────────────────────────── */}
+        <View style={styles.kidoBotSection}>
+          <View style={styles.shineBadge}>
+            <Text style={styles.shineBadgeText}>KIDOBOT COMPANION</Text>
+          </View>
+          <Text style={styles.kidoBotTitle}>
+            Meet Your <Text style={{ color: '#FACC15' }}>KidoBot</Text>{
+}
+            <Text style={{ color: '#0EA5E9' }}>AI Coding Partner</Text>
+          </Text>
+          <Text style={styles.kidoBotDesc}>
+            Meet KidoBot, your premium interactive AI coding companion! He rides along with you on every programming quest, offering personalized hints and supporting you every step of the way.
+          </Text>
+
+          {/* Mascot Image */}
+          <View style={styles.kidoBotImageWrap}>
+            <Image
+              source={require('../../assets/no_bg_output/kidobot.webp')}
+              style={styles.kidoBotImg}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Mini Cards */}
+          <View style={styles.kidoBotCardsRow}>
+            <View style={styles.kidoMiniCard}>
+              <Text style={styles.kidoMiniTitle}>Co-Mentor</Text>
+              <Text style={styles.kidoMiniDesc}>Helps complete the project when you are completely stuck.</Text>
+            </View>
+            <View style={styles.kidoMiniCard}>
+              <Text style={[styles.kidoMiniTitle, { color: '#10B981' }]}>AI Hint</Text>
+              <Text style={styles.kidoMiniDesc}>Guides kids block-by-block through the coding challenges.</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ──────────────────────────────────────────
+            5. HOW IT WORKS SECTION (CODING WIZARD)
+        ────────────────────────────────────────── */}
+        <View style={styles.howSection}>
+          <Text style={styles.howMainTitle}>
+            <Text style={{ color: '#fff' }}>How to Become a</Text>{
+}
+            <Text style={{ color: '#8B5CF6' }}>Coding Wizard</Text>
+          </Text>
+          <Text style={styles.howSubtitle}>Forget boring lectures. In Kido Dev, you learn by doing.</Text>
+
+          {/* 4 Steps */}
+          <View style={styles.stepsList}>
+            {HOW_STEPS.map((s, idx) => (
+              <View key={idx} style={styles.stepCard}>
+                <View style={[styles.stepNumCircle, { backgroundColor: s.color }]}>
+                  <Text style={styles.stepNumText}>{s.num}</Text>
+                </View>
+                <View style={styles.stepContent}>
+                  <Text style={styles.stepTitle}>{s.title}</Text>
+                  <Text style={styles.stepText}>{s.text}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ──────────────────────────────────────────
+            6. SYLLABUS SECTION
+        ────────────────────────────────────────── */}
+        <View style={styles.syllabusSection}>
+          <View style={styles.shineBadge}>
+            <Text style={styles.shineBadgeText}>STRUCTURED CURRICULUM</Text>
+          </View>
+          <Text style={styles.syllabusTitle}>Built for Progressive Mastery</Text>
+          <Text style={styles.syllabusSubtitle}>From foundational spatial algorithms to advanced game loops.</Text>
+
+          <View style={styles.syllabusCardsList}>
+            {SYLLABUS_LEVELS.map((lvl) => (
+              <View key={lvl.level} style={[styles.syllabusCard, { borderColor: lvl.accent }]}>
+                <View style={styles.syllabusCardTop}>
+                  <View style={[styles.stepBadge, { backgroundColor: lvl.accent }]}>
+                    <Text style={styles.stepBadgeText}>{lvl.badge}</Text>
                   </View>
-                ))}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                  <Text style={[styles.difficultyText, { color: lvl.accent }]}>{lvl.difficulty}</Text>
+                </View>
 
-        {/* BOTTOM CALLOUT */}
-        <View style={[styles.bottomBanner, { backgroundColor: colors.primary }]}>
-          <Image source={assets.sprite_logo} style={styles.bottomMascot} resizeMode="contain" />
-          <View style={styles.bottomBannerText}>
-            <Text style={styles.bottomBannerTitle}>Ready To Start Your Adventure?</Text>
-            <Text style={styles.bottomBannerSub}>Jump into Level 1 and unlock the secrets of motion and animation!</Text>
-            <TouchableOpacity
-              style={styles.bannerActionBtn}
-              onPress={handleStartAdventure}
-              activeOpacity={0.9}
-            >
-              <Text style={[styles.bannerActionBtnText, { color: colors.primary }]}>START FREE QUEST</Text>
-            </TouchableOpacity>
+                <Text style={styles.syllabusCardTitle}>{lvl.title}</Text>
+                <Text style={styles.syllabusCardDesc}>{lvl.desc}</Text>
+
+                <View style={styles.topicsRow}>
+                  {lvl.topics.map((t, tidx) => (
+                    <View key={tidx} style={styles.topicBadge}>
+                      <FontAwesome5 name="check-circle" size={10} color={lvl.accent} />
+                      <Text style={styles.topicBadgeText}>{t}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            ))}
           </View>
         </View>
 
-        {/* FOOTER */}
+        {/* ──────────────────────────────────────────
+            7. TEAM & LEADERSHIP SECTION
+        ────────────────────────────────────────── */}
+        <View style={styles.teamSection}>
+          <Text style={styles.teamMainTitle}>Leadership & Academic Vision</Text>
+          <Text style={styles.teamSubtitle}>
+            World-class educators and architects dedicated to young creators.
+          </Text>
+
+          <View style={styles.teamList}>
+            {TEAM_MEMBERS.map((m) => (
+              <View key={m.id} style={[styles.teamCard, { borderColor: m.accent }]}>
+                <Image source={m.image} style={styles.teamAvatar} resizeMode="contain" />
+                <View style={styles.teamInfo}>
+                  <View style={[styles.teamBadge, { backgroundColor: `${m.accent}25` }]}>
+                    <Text style={[styles.teamBadgeText, { color: m.accent }]}>{m.badge}</Text>
+                  </View>
+                  <Text style={styles.teamName}>{m.name}</Text>
+                  <Text style={styles.teamRole}>{m.role}</Text>
+                  <Text style={styles.teamBio}>{m.bio}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* ──────────────────────────────────────────
+            8. FOOTER
+        ────────────────────────────────────────── */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>© 2026 Kido Dev • Gamified Learning Platform for Kids</Text>
+          <Image source={assets.logo} style={styles.footerLogo} resizeMode="contain" />
+          <Text style={styles.footerDesc}>
+            Kido Dev is the gamified coding playground inspiring children to build, invent, and create with code.
+          </Text>
+          <View style={styles.footerLinksRow}>
+            <TouchableOpacity onPress={() => navigation.navigate('Home')}>
+              <Text style={styles.footerLink}>Home</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Levels')}>
+              <Text style={styles.footerLink}>Levels</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('GamesHub')}>
+              <Text style={styles.footerLink}>Mini-Games</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => navigation.navigate('Auth')}>
+              <Text style={styles.footerLink}>Passport</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.copyrightText}>© 2026 Kido Dev • Code Nexus. All Rights Reserved.</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -240,347 +555,536 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  navbar: {
+  wonderbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
+    backgroundColor: '#070A13',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
   },
   navLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
   },
   logo: {
     width: 110,
-    height: 38,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
+    height: 36,
   },
   navRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  themeBtn: {
+  themePillBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 20,
-    borderWidth: 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 229, 255, 0.4)',
+    backgroundColor: 'rgba(0, 229, 255, 0.08)',
   },
-  themeBtnText: {
+  themePillText: {
+    color: '#00E5FF',
     fontSize: 11,
-    fontWeight: '700',
-  },
-  userPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  userPillText: {
-    fontSize: 12,
     fontWeight: '800',
-    color: '#000',
   },
-  loginBtn: {
+  menuBtn: {
+    padding: 8,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  navCtaBtn: {
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: 20,
+    backgroundColor: '#0EA5E9',
   },
-  loginBtnText: {
+  navCtaText: {
     color: '#fff',
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  scrollContent: {
-    paddingBottom: 40,
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-start',
   },
-  heroContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
-    alignItems: 'center',
+  drawerContent: {
+    backgroundColor: '#0F172A',
+    padding: 24,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  heroTablet: {
+  drawerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingHorizontal: 40,
-  },
-  heroTextContainer: {
-    flex: 1,
     alignItems: 'center',
-  },
-  superTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 87, 34, 0.1)',
-    marginBottom: 12,
-  },
-  superTagText: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    fontSize: isTablet ? 42 : 32,
-    fontWeight: '900',
-    textAlign: 'center',
-    lineHeight: isTablet ? 50 : 38,
-    marginBottom: 12,
-  },
-  heroSubtitle: {
-    fontSize: isTablet ? 17 : 14,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    maxWidth: 500,
-  },
-  ctaRow: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-    width: '100%',
     marginBottom: 24,
   },
-  primaryBtn: {
+  drawerLogo: {
+    width: 120,
+    height: 38,
+  },
+  drawerLinks: {
+    gap: 16,
+  },
+  drawerLinkItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 28,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 6,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
   },
-  primaryBtnText: {
+  drawerLinkIcon: {
+    marginRight: 14,
+    width: 24,
+  },
+  drawerLinkText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    fontSize: 16,
+    fontWeight: '800',
   },
-  secondaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 28,
-    borderWidth: 2,
+  scrollBody: {
+    paddingBottom: 40,
   },
-  secondaryBtnText: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  heroImageWrapper: {
-    width: isTablet ? 380 : width * 0.75,
-    height: isTablet ? 320 : 240,
+  heroSection: {
+    minHeight: 520,
     position: 'relative',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 60,
   },
-  heroImage: {
+  heroDarkOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+  },
+  heroContentWrapper: {
+    alignItems: 'center',
+    zIndex: 10,
+    maxWidth: 600,
+  },
+  heroTaglinePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(14, 165, 233, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(14, 165, 233, 0.4)',
+    marginBottom: 18,
+  },
+  heroTaglineText: {
+    color: '#38BDF8',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  heroTitle: {
+    fontSize: isTablet ? 54 : 36,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: isTablet ? 64 : 44,
+    marginBottom: 28,
+  },
+  heroVibrantBtn: {
+    borderRadius: 100,
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+  },
+  heroBtnGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 36,
+    paddingVertical: 18,
+  },
+  heroBtnText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  featuresSection: {
+    padding: 20,
+    backgroundColor: '#070A13',
+  },
+  sectionHeaderCenter: {
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  shineBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: 'rgba(250, 204, 21, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(250, 204, 21, 0.3)',
+    marginBottom: 10,
+  },
+  shineBadgeText: {
+    color: '#FACC15',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  featuresTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 34,
+  },
+  bentoCard: {
+    height: 240,
+    borderRadius: 24,
+    overflow: 'hidden',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.15)',
+    position: 'relative',
+    justifyContent: 'flex-end',
+  },
+  bentoDarkOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  bentoContent: {
+    padding: 20,
+    zIndex: 2,
+  },
+  bentoIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  bentoCardTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    marginBottom: 6,
+  },
+  bentoCardDesc: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  bentoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    alignSelf: 'flex-start',
+    marginTop: 10,
+  },
+  bentoBtnText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  kidoBotSection: {
+    backgroundColor: '#0F172A',
+    padding: 24,
+    alignItems: 'center',
+  },
+  kidoBotTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'center',
+    lineHeight: 32,
+    marginBottom: 10,
+  },
+  kidoBotDesc: {
+    color: '#94A3B8',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+    maxWidth: 500,
+  },
+  kidoBotImageWrap: {
+    width: 180,
+    height: 180,
+    marginBottom: 20,
+  },
+  kidoBotImg: {
     width: '100%',
     height: '100%',
   },
-  floatingBadge: {
-    position: 'absolute',
+  kidoBotCardsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  starBadge: {
-    top: 20,
-    left: 0,
-  },
-  aiBadge: {
-    bottom: 20,
-    right: 0,
-  },
-  floatingBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#000',
-  },
-  sectionHeader: {
-    paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  featuresGrid: {
-    paddingHorizontal: 16,
     gap: 12,
+    width: '100%',
   },
-  featuresTablet: {
-    flexDirection: 'row',
-  },
-  featureCard: {
+  kidoMiniCard: {
     flex: 1,
-    padding: 18,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  featureIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  featureTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  featureDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-  },
-  curriculumRow: {
-    paddingHorizontal: 16,
-    gap: 14,
-    paddingBottom: 10,
-  },
-  curriculumCard: {
-    width: 220,
-    padding: 16,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    elevation: 2,
-  },
-  curriculumBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginBottom: 8,
-  },
-  curriculumBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  curriculumCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  curriculumCardDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-    marginBottom: 10,
-  },
-  topicsList: {
-    gap: 4,
-  },
-  topicPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  topicText: {
-    fontSize: 11,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  bottomBanner: {
-    marginHorizontal: 16,
-    marginTop: 30,
-    borderRadius: 24,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  bottomMascot: {
-    width: 75,
-    height: 75,
-  },
-  bottomBannerText: {
-    flex: 1,
-  },
-  bottomBannerTitle: {
-    color: '#fff',
-    fontSize: 17,
+  kidoMiniTitle: {
+    color: '#0EA5E9',
+    fontSize: 14,
     fontWeight: '900',
     marginBottom: 4,
   },
-  bottomBannerSub: {
-    color: 'rgba(255,255,255,0.9)',
+  kidoMiniDesc: {
+    color: '#94A3B8',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  howSection: {
+    backgroundColor: '#070A13',
+    padding: 24,
+  },
+  howMainTitle: {
+    fontSize: 28,
+    fontWeight: '900',
+    textAlign: 'center',
+    lineHeight: 34,
+    marginBottom: 6,
+  },
+  howSubtitle: {
+    color: '#94A3B8',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  stepsList: {
+    gap: 14,
+  },
+  stepCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    gap: 14,
+  },
+  stepNumCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stepNumText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  stepContent: {
+    flex: 1,
+  },
+  stepTitle: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
+    marginBottom: 4,
+  },
+  stepText: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  syllabusSection: {
+    backgroundColor: '#0F172A',
+    padding: 24,
+  },
+  syllabusTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  syllabusSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  syllabusCardsList: {
+    gap: 14,
+  },
+  syllabusCard: {
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 22,
+    padding: 18,
+    borderWidth: 1.5,
+  },
+  syllabusCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  stepBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  stepBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  difficultyText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  syllabusCardTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  syllabusCardDesc: {
+    color: '#94A3B8',
     fontSize: 12,
     lineHeight: 16,
     marginBottom: 12,
   },
-  bannerActionBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
+  topicsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
   },
-  bannerActionBtnText: {
+  topicBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  topicBadgeText: {
+    color: '#E2E8F0',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  teamSection: {
+    backgroundColor: '#070A13',
+    padding: 24,
+  },
+  teamMainTitle: {
+    color: '#fff',
+    fontSize: 24,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  teamSubtitle: {
+    color: '#94A3B8',
     fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  teamList: {
+    gap: 14,
+  },
+  teamCard: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1.5,
+    alignItems: 'center',
+    gap: 14,
+  },
+  teamAvatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  teamInfo: {
+    flex: 1,
+  },
+  teamBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  teamBadgeText: {
+    fontSize: 8,
     fontWeight: '900',
   },
-  footer: {
-    marginTop: 30,
-    alignItems: 'center',
-    paddingHorizontal: 16,
+  teamName: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: '900',
   },
-  footerText: {
-    fontSize: 11,
+  teamRole: {
     color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  teamBio: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  footer: {
+    backgroundColor: '#05070E',
+    padding: 24,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  footerLogo: {
+    width: 120,
+    height: 40,
+    marginBottom: 10,
+  },
+  footerDesc: {
+    color: '#64748B',
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
+    marginBottom: 16,
+    maxWidth: 400,
+  },
+  footerLinksRow: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 16,
+  },
+  footerLink: {
+    color: '#0EA5E9',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  copyrightText: {
+    color: '#475569',
+    fontSize: 10,
   },
 });
