@@ -15,6 +15,7 @@ import { useRoute, useNavigation } from '@react-navigation/native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useGame } from '../context/GameContext';
 import { curriculum } from '../data/curriculum';
 import { evaluateCode, saveProgress, GradeResult } from '../utils/grader';
 
@@ -305,6 +306,8 @@ export const MagicStudioScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const { colors, assets } = useTheme();
   const { childProfile } = useAuth();
+  const { addReward, equippedSkin, skins, setNextQuestId } = useGame();
+  const activeSkin = skins.find((s) => s.id === equippedSkin) || skins[0];
 
   // Normalize lesson ID (e.g. L1P1 or level-1-1 -> L1P1)
   const rawId = route.params?.lessonId || 'L1P1';
@@ -375,6 +378,23 @@ export const MagicStudioScreen: React.FC = () => {
         badge: grade.badge,
         xpEarned: grade.xpEarned,
       });
+    }
+
+    // 3. Award In-Game Currency & Progress
+    if (grade.isPassed) {
+      const cogsEarned = grade.score === 100 ? 50 : 25;
+      const stardustEarned = grade.score === 100 ? 5 : 0;
+      await addReward(grade.xpEarned, cogsEarned, stardustEarned);
+
+      // Advance next quest pointer
+      const match = lessonId.match(/L(\d+)P(\d+)/);
+      if (match) {
+        const lvl = parseInt(match[1], 10);
+        const pNum = parseInt(match[2], 10);
+        if (pNum < 10) {
+          setNextQuestId(`L${lvl}P${pNum + 1}`);
+        }
+      }
     }
 
     // 3. Animate Sprite on top Live Stage
@@ -518,6 +538,14 @@ export const MagicStudioScreen: React.FC = () => {
               </View>
             )}
 
+            {/* TARGET GOAL PROP (e.g. Backyard Dinner Bowl) */}
+            <View style={styles.stageTargetGoal}>
+              <View style={styles.goalGlowCircle}>
+                <Text style={styles.goalEmoji}>🥣</Text>
+              </View>
+              <Text style={styles.goalLabel}>Dinner Goal</Text>
+            </View>
+
             {/* SPRITE CHARACTER (CAT / HERO) */}
             <Animated.View
               style={[
@@ -530,7 +558,13 @@ export const MagicStudioScreen: React.FC = () => {
                 },
               ]}
             >
-              <Image source={assets.sprite_logo} style={styles.spriteImg} resizeMode="contain" />
+              {activeSkin?.emoji && activeSkin.id !== 'cat_classic' ? (
+                <View style={styles.avatarSkinBox}>
+                  <Text style={styles.stageSkinEmoji}>{activeSkin.emoji}</Text>
+                </View>
+              ) : (
+                <Image source={assets.sprite_logo} style={styles.spriteImg} resizeMode="contain" />
+              )}
             </Animated.View>
 
             {/* Coordinate Pill in bottom corner */}
@@ -637,13 +671,27 @@ export const MagicStudioScreen: React.FC = () => {
               />
             </View>
 
-            {/* XP REWARD BADGE */}
-            {(gradeResult?.xpEarned || 0) > 0 && (
-              <View style={styles.winXpPill}>
-                <FontAwesome5 name="bolt" size={11} color="#D97706" />
-                <Text style={styles.winXpText}>+{gradeResult?.xpEarned} XP EARNED</Text>
-              </View>
-            )}
+            {/* IN-GAME LOOT REWARDS ROW */}
+            <View style={styles.lootRewardsRow}>
+              {(gradeResult?.xpEarned || 0) > 0 && (
+                <View style={styles.winXpPill}>
+                  <FontAwesome5 name="bolt" size={11} color="#D97706" />
+                  <Text style={styles.winXpText}>+{gradeResult?.xpEarned} XP</Text>
+                </View>
+              )}
+              {(gradeResult?.score || 0) >= 40 && (
+                <View style={styles.winCogsPill}>
+                  <FontAwesome5 name="cog" size={11} color="#B45309" />
+                  <Text style={styles.winCogsText}>+{(gradeResult?.score || 0) === 100 ? 50 : 25} ⚙️</Text>
+                </View>
+              )}
+              {(gradeResult?.score || 0) === 100 && (
+                <View style={styles.winStardustPill}>
+                  <FontAwesome5 name="gem" size={11} color="#0284C7" />
+                  <Text style={styles.winStardustText}>+5 💎</Text>
+                </View>
+              )}
+            </View>
 
             {/* AI TUTOR FEEDBACK */}
             <Text style={styles.winSubtitle}>{gradeResult?.feedback}</Text>
@@ -1069,5 +1117,82 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13,
     fontWeight: '900',
+  },
+  stageTargetGoal: {
+    position: 'absolute',
+    right: 18,
+    bottom: 12,
+    alignItems: 'center',
+    zIndex: 5,
+  },
+  goalGlowCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 3,
+  },
+  goalEmoji: {
+    fontSize: 22,
+  },
+  goalLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#92400E',
+    marginTop: 2,
+  },
+  avatarSkinBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#6366F1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    elevation: 4,
+  },
+  stageSkinEmoji: {
+    fontSize: 32,
+  },
+  lootRewardsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+  },
+  winCogsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  winCogsText: {
+    color: '#B45309',
+    fontWeight: '900',
+    fontSize: 11,
+  },
+  winStardustPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  winStardustText: {
+    color: '#0284C7',
+    fontWeight: '900',
+    fontSize: 11,
   },
 });

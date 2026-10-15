@@ -20,6 +20,7 @@ import { RootStackParamList } from '../navigation/NavigationTypes';
 import { curriculum, CurriculumLevel, LessonProject } from '../data/curriculum';
 import { supabase } from '../utils/supabaseClient';
 import { getLevelFromXp, getProjectBadge } from '../utils/grader';
+import { useGame } from '../context/GameContext';
 
 const { width } = Dimensions.get('window');
 
@@ -41,6 +42,7 @@ export const LevelsScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors, assets, theme, toggleTheme } = useTheme();
   const { childProfile } = useAuth();
+  const { cogs, stardust } = useGame();
 
   const [view, setView] = useState<'selection' | 'map'>('selection');
   const [selectedLevel, setSelectedLevel] = useState<CurriculumLevel>(curriculum[0]);
@@ -119,16 +121,19 @@ export const LevelsScreen: React.FC = () => {
         {/* STATS PILLS */}
         <View style={styles.statsRow}>
           <View style={styles.statPill}>
+            <FontAwesome5 name="cog" size={11} color="#F59E0B" />
+            <Text style={styles.statText}>{cogs}</Text>
+          </View>
+          <View style={styles.statPill}>
+            <FontAwesome5 name="gem" size={11} color="#38BDF8" />
+            <Text style={styles.statText}>{stardust}</Text>
+          </View>
+          <View style={styles.statPill}>
             <Image source={assets.xp_badge} style={styles.statIcon} resizeMode="contain" />
             <Text style={styles.statText}>{userXp} XP</Text>
           </View>
           <View style={styles.statPill}>
-            <Image source={assets.rank_badge} style={styles.statIcon} resizeMode="contain" />
             <Text style={styles.statText}>{userRank}</Text>
-          </View>
-          <View style={styles.statPill}>
-            <Image source={assets.missions_badge} style={styles.statIcon} resizeMode="contain" />
-            <Text style={styles.statText}>Lvl {selectedLevel.level}</Text>
           </View>
         </View>
 

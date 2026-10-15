@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,16 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
   Dimensions,
-  Platform,
+  Modal,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { useGame } from '../context/GameContext';
 import { RootStackParamList } from '../navigation/NavigationTypes';
 import { curriculum } from '../data/curriculum';
 
@@ -25,213 +25,312 @@ const isTablet = width >= 768;
 export const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { colors, assets, theme, toggleTheme } = useTheme();
-  const { role, childProfile, logout } = useAuth();
+  const { role, childProfile } = useAuth();
+  const { cogs, stardust, streakDays, equippedSkin, skins, buySkin, equipSkin, nextQuestId } = useGame();
 
-  const handleStartAdventure = () => {
-    if (role === 'kid' || role === 'parent') {
-      navigation.navigate('Levels');
-    } else {
-      navigation.navigate('Auth');
+  const [shopVisible, setShopVisible] = useState(false);
+  const [dailyByteDone, setDailyByteDone] = useState(false);
+
+  // Find next mission details
+  const nextMission = React.useMemo(() => {
+    for (const lvl of curriculum) {
+      const p = lvl.projects.find((proj) => proj.id === nextQuestId);
+      if (p) return p;
     }
+    return curriculum[0].projects[0];
+  }, [nextQuestId]);
+
+  const activeSkinObj = skins.find((s) => s.id === equippedSkin) || skins[0];
+
+  const handleLaunchMission = () => {
+    navigation.navigate('MagicStudio', {
+      lessonId: nextMission.id,
+      lessonTitle: nextMission.title,
+      objective: nextMission.objective,
+      classLevel: nextMission.class_level,
+    });
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={theme === 'forest' ? 'light-content' : 'dark-content'} backgroundColor={colors.primary} />
-      
-      {/* TOP NAVBAR */}
-      <View style={[styles.navbar, { backgroundColor: colors.navbar_bg }]}>
-        <View style={styles.navLeft}>
-          <Image source={assets.logo} style={styles.logo} resizeMode="contain" />
-          <View style={[styles.badge, { backgroundColor: colors.primary }]}>
-            <FontAwesome5 name="sparkles" size={10} color="#fff" />
-            <Text style={styles.badgeText}>Kids Coding</Text>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]} edges={['top', 'left', 'right']}>
+      {/* ═════════════════════════════════════════
+          TOP GAME HUD (AVATAR, CURRENCY, STREAK)
+          ═════════════════════════════════════════ */}
+      <View style={[styles.gameHud, { backgroundColor: colors.navbar_bg }]}>
+        {/* Left: Avatar & Player Info */}
+        <TouchableOpacity style={styles.hudPlayerBadge} onPress={() => setShopVisible(true)} activeOpacity={0.8}>
+          <View style={styles.avatarCircle}>
+            <Text style={styles.avatarEmoji}>{activeSkinObj.emoji}</Text>
           </View>
-        </View>
-
-        <View style={styles.navRight}>
-          {/* Theme Toggle Button */}
-          <TouchableOpacity
-            style={[styles.themeBtn, { borderColor: colors.accent }]}
-            onPress={toggleTheme}
-            activeOpacity={0.8}
-          >
-            <FontAwesome5
-              name={theme === 'forest' ? 'tree' : 'water'}
-              size={16}
-              color={colors.accent}
-            />
-            <Text style={[styles.themeBtnText, { color: colors.accent }]}>
-              {theme === 'forest' ? 'Forest' : 'Aqua'}
+          <View>
+            <Text style={styles.playerName} numberOfLines={1}>
+              {childProfile?.name || 'Kido Cadet'}
             </Text>
-          </TouchableOpacity>
+            <Text style={styles.playerRank}>{childProfile?.level || 'Bronze Realm'}</Text>
+          </View>
+        </TouchableOpacity>
 
-          {/* User profile or Auth button */}
-          {role ? (
-            <TouchableOpacity
-              style={[styles.userPill, { backgroundColor: colors.secondary }]}
-              onPress={() => navigation.navigate(role === 'parent' ? 'ParentDashboard' : 'Levels')}
-            >
-              <FontAwesome5 name={role === 'kid' ? 'gamepad' : 'user-shield'} size={14} color="#000" />
-              <Text style={styles.userPillText}>
-                {role === 'kid' ? childProfile?.name || 'Explorer' : 'Dashboard'}
-              </Text>
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: colors.primary }]}
-              onPress={() => navigation.navigate('Auth')}
-            >
-              <Text style={styles.loginBtnText}>Log In</Text>
-            </TouchableOpacity>
-          )}
+        {/* Right: Currency & Streaks */}
+        <View style={styles.hudStatsRow}>
+          {/* Cogs (Soft currency) */}
+          <View style={styles.hudStatPill}>
+            <FontAwesome5 name="cog" size={12} color="#F59E0B" />
+            <Text style={styles.hudStatValue}>{cogs}</Text>
+          </View>
+
+          {/* Stardust (Hard currency) */}
+          <View style={styles.hudStatPill}>
+            <FontAwesome5 name="gem" size={12} color="#38BDF8" />
+            <Text style={styles.hudStatValue}>{stardust}</Text>
+          </View>
+
+          {/* Daily Streak */}
+          <View style={[styles.hudStatPill, styles.streakPill]}>
+            <FontAwesome5 name="fire" size={13} color="#EF4444" />
+            <Text style={[styles.hudStatValue, { color: '#EF4444' }]}>{streakDays}d</Text>
+          </View>
+
+          {/* Theme Switcher */}
+          <TouchableOpacity style={styles.hudThemeBtn} onPress={toggleTheme}>
+            <FontAwesome5 name={theme === 'forest' ? 'tree' : 'water'} size={13} color={colors.accent} />
+          </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* HERO SECTION */}
-        <View style={[styles.heroContainer, isTablet && styles.heroTablet]}>
-          <View style={styles.heroTextContainer}>
-            <View style={styles.superTag}>
-              <FontAwesome5 name="rocket" size={12} color={colors.accent} />
-              <Text style={[styles.superTagText, { color: colors.accent }]}>GAMIFIED ADVENTURE</Text>
-            </View>
-            <Text style={[styles.heroTitle, { color: colors.text_dark }]}>
-              Code. Play.{'\n'}
-              <Text style={{ color: colors.primary }}>Create Magic!</Text>
-            </Text>
-            <Text style={[styles.heroSubtitle, { color: colors.text_muted }]}>
-              The interactive block-coding universe for kids. Solve fun puzzles, build animations, and explore vibrant island maps!
-            </Text>
-
-            {/* ACTION BUTTONS */}
-            <View style={styles.ctaRow}>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                onPress={handleStartAdventure}
-                activeOpacity={0.85}
-              >
-                <FontAwesome5 name="play" size={16} color="#fff" />
-                <Text style={styles.primaryBtnText}>
-                  {role ? 'CONTINUE QUEST' : 'LAUNCH PLAYLAND'}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.secondaryBtn, { borderColor: colors.primary, backgroundColor: colors.card_bg }]}
-                onPress={() => navigation.navigate('GamesHub')}
-                activeOpacity={0.85}
-              >
-                <FontAwesome5 name="gamepad" size={16} color={colors.primary} />
-                <Text style={[styles.secondaryBtnText, { color: colors.primary }]}>MINI-GAMES</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* HERO MASCOT ILLUSTRATION */}
-          <View style={styles.heroImageWrapper}>
-            <Image source={assets.hero} style={styles.heroImage} resizeMode="contain" />
-            <View style={[styles.floatingBadge, styles.starBadge, { backgroundColor: colors.secondary }]}>
-              <FontAwesome5 name="star" size={16} color="#000" />
-              <Text style={styles.floatingBadgeText}>Fun!</Text>
-            </View>
-            <View style={[styles.floatingBadge, styles.aiBadge, { backgroundColor: colors.accent }]}>
-              <FontAwesome5 name="robot" size={16} color="#fff" />
-              <Text style={[styles.floatingBadgeText, { color: '#fff' }]}>AI Tutor</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* 3 CORE FEATURE CARDS */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text_dark }]}>Why Kids Love Kido Dev</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text_muted }]}>Designed specially for hands-on, zero-stress learning</Text>
-        </View>
-
-        <View style={[styles.featuresGrid, isTablet && styles.featuresTablet]}>
-          <View style={[styles.featureCard, { borderColor: '#E2E8F0', backgroundColor: colors.card_bg }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(14, 165, 233, 0.15)' }]}>
-              <FontAwesome5 name="puzzle-piece" size={26} color="#0EA5E9" />
-            </View>
-            <Text style={styles.featureTitle}>Block Magic</Text>
-            <Text style={styles.featureDesc}>
-              Snap colourful coding blocks together like digital Lego. No syntax errors, just pure creativity.
-            </Text>
-          </View>
-
-          <View style={[styles.featureCard, { borderColor: '#E2E8F0', backgroundColor: colors.card_bg }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-              <FontAwesome5 name="map-marked-alt" size={26} color="#F59E0B" />
-            </View>
-            <Text style={styles.featureTitle}>Island Maps</Text>
-            <Text style={styles.featureDesc}>
-              Progress through dynamic story levels, earn medals, open treasure chests, and gain XP.
-            </Text>
-          </View>
-
-          <View style={[styles.featureCard, { borderColor: '#E2E8F0', backgroundColor: colors.card_bg }]}>
-            <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-              <FontAwesome5 name="cat" size={26} color="#8B5CF6" />
-            </View>
-            <Text style={styles.featureTitle}>Kido AI Companion</Text>
-            <Text style={styles.featureDesc}>
-              Our friendly animated cat guide gently highlights hints when your child gets stuck.
-            </Text>
-          </View>
-        </View>
-
-        {/* CURRICULUM PREVIEW */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.text_dark }]}>Curriculum Road Map</Text>
-          <Text style={[styles.sectionSubtitle, { color: colors.text_muted }]}>10 exciting milestone levels from Rookie to Champion</Text>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.curriculumRow}>
-          {curriculum.map((item, idx) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.curriculumCard, { backgroundColor: colors.card_bg }]}
-              onPress={handleStartAdventure}
-              activeOpacity={0.9}
-            >
-              <View style={[styles.curriculumBadge, { backgroundColor: colors.primary }]}>
-                <Text style={styles.curriculumBadgeText}>LEVEL {item.level}</Text>
+        {/* ═════════════════════════════════════════
+            HERO CARD: CONTINUE QUEST (PLAY BUTTON)
+            ═════════════════════════════════════════ */}
+        <View style={[styles.missionHeroCard, { backgroundColor: colors.card_bg }]}>
+          <View style={styles.heroGlowBanner}>
+            <View style={styles.missionTagRow}>
+              <View style={styles.nextQuestPill}>
+                <FontAwesome5 name="compass" size={10} color="#fff" />
+                <Text style={styles.nextQuestPillText}>CURRENT QUEST • {nextMission.id}</Text>
               </View>
-              <Text style={styles.curriculumCardTitle}>{item.title.replace(/^Level \d+:\s*/, '')}</Text>
-              <Text style={styles.curriculumCardDesc}>{item.description}</Text>
-              <View style={styles.topicsList}>
-                {item.topics.slice(0, 3).map((t, tidx) => (
-                  <View key={tidx} style={styles.topicPill}>
-                    <FontAwesome5 name="check-circle" size={10} color={colors.primary} />
-                    <Text style={styles.topicText}>{t}</Text>
+              <Text style={styles.xpRewardTag}>+10 XP</Text>
+            </View>
+
+            <Text style={styles.missionTitle}>{nextMission.title}</Text>
+            <Text style={styles.missionObjective} numberOfLines={2}>
+              {nextMission.objective || 'Help Whiskers use code blocks to reach the goal!'}
+            </Text>
+
+            {/* Big Play Button */}
+            <TouchableOpacity
+              style={[styles.bigPlayBtn, { backgroundColor: colors.primary }]}
+              onPress={handleLaunchMission}
+              activeOpacity={0.85}
+            >
+              <FontAwesome5 name="play" size={18} color="#fff" style={styles.playIcon} />
+              <Text style={styles.bigPlayBtnText}>START QUEST MISSION</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* ═════════════════════════════════════════
+            DAILY BYTE: 2-MINUTE LOGIC PUZZLE
+            ═════════════════════════════════════════ */}
+        <View style={styles.dailyByteCard}>
+          <View style={styles.dailyByteIconWrap}>
+            <FontAwesome5 name="bolt" size={16} color="#D97706" />
+          </View>
+          <View style={styles.dailyByteTextWrap}>
+            <View style={styles.dailyByteHeader}>
+              <Text style={styles.dailyByteTitle}>Daily Byte Challenge</Text>
+              <Text style={styles.dailyByteReward}>+20 ⚙️ & +5 XP</Text>
+            </View>
+            <Text style={styles.dailyByteDesc}>
+              {dailyByteDone
+                ? 'Challenge Completed! Streak boosted 🔥'
+                : 'Spot the pattern: Cat moves 50, turns 90°. Where is it facing?'}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.dailyByteBtn,
+              { backgroundColor: dailyByteDone ? '#10B981' : '#F59E0B' },
+            ]}
+            onPress={() => setDailyByteDone(true)}
+            disabled={dailyByteDone}
+            activeOpacity={0.8}
+          >
+            <FontAwesome5 name={dailyByteDone ? 'check' : 'arrow-right'} size={12} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* ═════════════════════════════════════════
+            THE 6 CODING REALMS (ADVENTURE WORLD)
+            ═════════════════════════════════════════ */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.sectionTitleLeft}>
+            <FontAwesome5 name="map-marked-alt" size={14} color={colors.primary} />
+            <Text style={[styles.sectionTitle, { color: colors.text_dark }]}>Coding Realms</Text>
+          </View>
+          <TouchableOpacity onPress={() => navigation.navigate('Levels')}>
+            <Text style={[styles.seeAllText, { color: colors.primary }]}>View All Realms →</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.realmsGrid}>
+          {curriculum.slice(0, 4).map((realm, idx) => {
+            const isUnlocked = idx === 0 || realm.level === 1;
+
+            return (
+              <TouchableOpacity
+                key={realm.id}
+                style={[
+                  styles.realmCard,
+                  { backgroundColor: colors.card_bg },
+                  !isUnlocked && styles.lockedRealmCard,
+                ]}
+                onPress={() => navigation.navigate('Levels')}
+                activeOpacity={0.88}
+              >
+                <View style={styles.realmTopRow}>
+                  <View style={[styles.realmBadge, { backgroundColor: isUnlocked ? colors.primary : '#94A3B8' }]}>
+                    <Text style={styles.realmBadgeText}>REALM {realm.level}</Text>
                   </View>
-                ))}
-              </View>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+                  <Text style={styles.realmQuestCount}>{realm.projects.length} Quests</Text>
+                </View>
 
-        {/* BOTTOM CALLOUT */}
-        <View style={[styles.bottomBanner, { backgroundColor: colors.primary }]}>
-          <Image source={assets.sprite_logo} style={styles.bottomMascot} resizeMode="contain" />
-          <View style={styles.bottomBannerText}>
-            <Text style={styles.bottomBannerTitle}>Ready To Start Your Adventure?</Text>
-            <Text style={styles.bottomBannerSub}>Jump into Level 1 and unlock the secrets of motion and animation!</Text>
-            <TouchableOpacity
-              style={styles.bannerActionBtn}
-              onPress={handleStartAdventure}
-              activeOpacity={0.9}
-            >
-              <Text style={[styles.bannerActionBtnText, { color: colors.primary }]}>START FREE QUEST</Text>
-            </TouchableOpacity>
+                <Text style={styles.realmName}>{realm.title.replace(/^Level \d+:\s*/, '')}</Text>
+                <Text style={styles.realmDesc} numberOfLines={2}>
+                  {realm.description}
+                </Text>
+
+                <View style={styles.realmFooter}>
+                  <Text style={[styles.realmExploreText, { color: isUnlocked ? colors.primary : '#94A3B8' }]}>
+                    {isUnlocked ? 'Enter Realm' : 'Locked'}
+                  </Text>
+                  <FontAwesome5
+                    name={isUnlocked ? 'chevron-right' : 'lock'}
+                    size={11}
+                    color={isUnlocked ? colors.primary : '#94A3B8'}
+                  />
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* ═════════════════════════════════════════
+            ARCADE SANDBOX BANNER
+            ═════════════════════════════════════════ */}
+        <TouchableOpacity
+          style={styles.arcadeBanner}
+          onPress={() => navigation.navigate('GamesHub')}
+          activeOpacity={0.9}
+        >
+          <View style={styles.arcadeContent}>
+            <View style={styles.arcadeIconBadge}>
+              <FontAwesome5 name="gamepad" size={20} color="#8B5CF6" />
+            </View>
+            <View style={styles.arcadeTextWrap}>
+              <Text style={styles.arcadeTitle}>Kido Creator Arcade</Text>
+              <Text style={styles.arcadeSub}>Play mini-games built by student coders worldwide!</Text>
+            </View>
+          </View>
+          <FontAwesome5 name="arrow-right" size={14} color="#8B5CF6" />
+        </TouchableOpacity>
+      </ScrollView>
+
+      {/* ═════════════════════════════════════════
+          BOTTOM GAME NAVIGATION DOCK
+          ═════════════════════════════════════════ */}
+      <View style={[styles.bottomDock, { backgroundColor: colors.navbar_bg }]}>
+        <TouchableOpacity style={styles.dockItem} onPress={() => navigation.navigate('Home')}>
+          <FontAwesome5 name="home" size={16} color={colors.primary} />
+          <Text style={[styles.dockLabel, { color: colors.primary }]}>Hub</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.dockItem} onPress={() => navigation.navigate('Levels')}>
+          <FontAwesome5 name="map" size={16} color="#94A3B8" />
+          <Text style={styles.dockLabel}>Realms</Text>
+        </TouchableOpacity>
+
+        {/* Central Studio Button */}
+        <TouchableOpacity style={[styles.centerStudioBtn, { backgroundColor: colors.primary }]} onPress={handleLaunchMission}>
+          <FontAwesome5 name="code" size={18} color="#fff" />
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.dockItem} onPress={() => navigation.navigate('GamesHub')}>
+          <FontAwesome5 name="gamepad" size={16} color="#94A3B8" />
+          <Text style={styles.dockLabel}>Arcade</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.dockItem} onPress={() => setShopVisible(true)}>
+          <FontAwesome5 name="tshirt" size={16} color="#94A3B8" />
+          <Text style={styles.dockLabel}>Wardrobe</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ═════════════════════════════════════════
+          AVATAR & WARDROBE SHOP MODAL
+          ═════════════════════════════════════════ */}
+      <Modal visible={shopVisible} transparent={true} animationType="slide">
+        <View style={styles.shopOverlay}>
+          <View style={styles.shopCard}>
+            <View style={styles.shopHeader}>
+              <View style={styles.shopHeaderTitleRow}>
+                <FontAwesome5 name="tshirt" size={16} color="#6366F1" />
+                <Text style={styles.shopTitle}>Hero Wardrobe & Skins</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShopVisible(false)}>
+                <FontAwesome5 name="times-circle" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Balances */}
+            <View style={styles.shopBalancesRow}>
+              <View style={styles.shopBalanceItem}>
+                <FontAwesome5 name="cog" size={12} color="#F59E0B" />
+                <Text style={styles.shopBalanceText}>{cogs} Cogs</Text>
+              </View>
+              <View style={styles.shopBalanceItem}>
+                <FontAwesome5 name="gem" size={12} color="#38BDF8" />
+                <Text style={styles.shopBalanceText}>{stardust} Stardust</Text>
+              </View>
+            </View>
+
+            {/* Skins Grid */}
+            <ScrollView contentContainerStyle={styles.skinsGrid} showsVerticalScrollIndicator={false}>
+              {skins.map((skin) => {
+                const isEquipped = equippedSkin === skin.id;
+
+                return (
+                  <View key={skin.id} style={[styles.skinItemCard, isEquipped && styles.skinItemEquipped]}>
+                    <Text style={styles.skinEmoji}>{skin.emoji}</Text>
+                    <Text style={styles.skinName}>{skin.name}</Text>
+
+                    {skin.unlocked ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.skinActionBtn,
+                          { backgroundColor: isEquipped ? '#10B981' : '#6366F1' },
+                        ]}
+                        onPress={() => equipSkin(skin.id)}
+                        disabled={isEquipped}
+                      >
+                        <Text style={styles.skinActionText}>{isEquipped ? 'EQUIPPED' : 'EQUIP'}</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.skinActionBtn, { backgroundColor: '#F59E0B' }]}
+                        onPress={() => buySkin(skin.id)}
+                      >
+                        <Text style={styles.skinActionText}>
+                          {skin.cost} {skin.type === 'cogs' ? '⚙️' : '💎'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
           </View>
         </View>
-
-        {/* FOOTER */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>© 2026 Kido Dev • Gamified Learning Platform for Kids</Text>
-        </View>
-      </ScrollView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -240,347 +339,450 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
   },
-  navbar: {
+  gameHud: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  navLeft: {
+  hudPlayerBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  logo: {
-    width: 110,
-    height: 38,
+  avatarCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  badge: {
+  avatarEmoji: {
+    fontSize: 20,
+  },
+  playerName: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+    maxWidth: 90,
+  },
+  playerRank: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  hudStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  hudStatPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
-  badgeText: {
+  hudStatValue: {
     color: '#fff',
-    fontSize: 10,
-    fontWeight: '800',
-    fontFamily: Platform.OS === 'ios' ? 'System' : 'sans-serif-medium',
-  },
-  navRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  themeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-  themeBtnText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '800',
   },
-  userPill: {
-    flexDirection: 'row',
+  streakPill: {
+    backgroundColor: '#FEE2E2',
+  },
+  hudThemeBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  userPillText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#000',
-  },
-  loginBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  loginBtnText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '800',
   },
   scrollContent: {
-    paddingBottom: 40,
+    padding: 12,
+    paddingBottom: 90,
   },
-  heroContainer: {
-    paddingHorizontal: 20,
-    paddingTop: 24,
-    paddingBottom: 20,
-    alignItems: 'center',
-  },
-  heroTablet: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 40,
-  },
-  heroTextContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  superTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 87, 34, 0.1)',
-    marginBottom: 12,
-  },
-  superTagText: {
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.5,
-  },
-  heroTitle: {
-    fontSize: isTablet ? 42 : 32,
-    fontWeight: '900',
-    textAlign: 'center',
-    lineHeight: isTablet ? 50 : 38,
-    marginBottom: 12,
-  },
-  heroSubtitle: {
-    fontSize: isTablet ? 17 : 14,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-    maxWidth: 500,
-  },
-  ctaRow: {
-    flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-    width: '100%',
-    marginBottom: 24,
-  },
-  primaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 28,
+
+  /* MISSION HERO CARD */
+  missionHeroCard: {
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 14,
     elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  heroGlowBanner: {},
+  missionTagRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  nextQuestPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#6366F1',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  nextQuestPillText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  xpRewardTag: {
+    color: '#D97706',
+    fontWeight: '900',
+    fontSize: 11,
+  },
+  missionTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  missionObjective: {
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 16,
+    marginBottom: 16,
+  },
+  bigPlayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 16,
+    elevation: 4,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
     shadowRadius: 6,
   },
-  primaryBtnText: {
+  playIcon: {
+    marginRight: 8,
+  },
+  bigPlayBtnText: {
     color: '#fff',
     fontSize: 14,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
-  secondaryBtn: {
+
+  /* DAILY BYTE CARD */
+  dailyByteCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    borderRadius: 28,
-    borderWidth: 2,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
-  secondaryBtnText: {
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  heroImageWrapper: {
-    width: isTablet ? 380 : width * 0.75,
-    height: isTablet ? 320 : 240,
-    position: 'relative',
+  dailyByteIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FDE68A',
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 10,
   },
-  heroImage: {
-    width: '100%',
-    height: '100%',
+  dailyByteTextWrap: {
+    flex: 1,
   },
-  floatingBadge: {
-    position: 'absolute',
+  dailyByteHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dailyByteTitle: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#92400E',
+  },
+  dailyByteReward: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  dailyByteDesc: {
+    fontSize: 10,
+    color: '#78350F',
+    marginTop: 2,
+    lineHeight: 13,
+  },
+  dailyByteBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+
+  /* REALMS SECTION */
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitleLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-  },
-  starBadge: {
-    top: 20,
-    left: 0,
-  },
-  aiBadge: {
-    bottom: 20,
-    right: 0,
-  },
-  floatingBadgeText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#000',
-  },
-  sectionHeader: {
-    paddingHorizontal: 20,
-    marginTop: 24,
-    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 14,
     fontWeight: '900',
   },
-  sectionSubtitle: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-  featuresGrid: {
-    paddingHorizontal: 16,
-    gap: 12,
-  },
-  featuresTablet: {
-    flexDirection: 'row',
-  },
-  featureCard: {
-    flex: 1,
-    padding: 18,
-    borderRadius: 20,
-    borderWidth: 1.5,
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  featureIconWrap: {
-    width: 50,
-    height: 50,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  featureTitle: {
-    fontSize: 16,
+  seeAllText: {
+    fontSize: 11,
     fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
   },
-  featureDesc: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
+  realmsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 16,
   },
-  curriculumRow: {
-    paddingHorizontal: 16,
-    gap: 14,
-    paddingBottom: 10,
-  },
-  curriculumCard: {
-    width: 220,
-    padding: 16,
-    borderRadius: 20,
+  realmCard: {
+    width: (width - 34) / 2,
+    borderRadius: 16,
+    padding: 12,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     elevation: 2,
   },
-  curriculumBadge: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+  lockedRealmCard: {
+    opacity: 0.65,
+  },
+  realmTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  realmBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  realmBadgeText: {
+    color: '#fff',
+    fontSize: 8,
+    fontWeight: '900',
+  },
+  realmQuestCount: {
+    fontSize: 9,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  realmName: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginBottom: 3,
+  },
+  realmDesc: {
+    fontSize: 10,
+    color: '#64748B',
+    lineHeight: 13,
     marginBottom: 8,
   },
-  curriculumBadgeText: {
+  realmFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+    paddingTop: 6,
+  },
+  realmExploreText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  /* ARCADE BANNER */
+  arcadeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F5F3FF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#DDD6FE',
+  },
+  arcadeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  arcadeIconBadge: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#EDE9FE',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arcadeTextWrap: {
+    flex: 1,
+  },
+  arcadeTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#6B21A8',
+  },
+  arcadeSub: {
+    fontSize: 10,
+    color: '#7E22CE',
+    marginTop: 1,
+  },
+
+  /* BOTTOM DOCK */
+  bottomDock: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  dockItem: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 60,
+  },
+  dockLabel: {
+    fontSize: 9,
+    color: '#94A3B8',
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  centerStudioBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: -20,
+    elevation: 6,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 6,
+  },
+
+  /* SHOP MODAL */
+  shopOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'flex-end',
+  },
+  shopCard: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  shopHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  shopHeaderTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  shopTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  shopBalancesRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
+  shopBalanceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  shopBalanceText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  skinsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    paddingBottom: 24,
+  },
+  skinItemCard: {
+    width: (width - 64) / 2,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  skinItemEquipped: {
+    borderColor: '#10B981',
+    backgroundColor: '#F0FDF4',
+  },
+  skinEmoji: {
+    fontSize: 36,
+    marginBottom: 6,
+  },
+  skinName: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  skinActionBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    width: '100%',
+    alignItems: 'center',
+  },
+  skinActionText: {
     color: '#fff',
     fontSize: 10,
     fontWeight: '900',
-  },
-  curriculumCardTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 6,
-  },
-  curriculumCardDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    lineHeight: 16,
-    marginBottom: 10,
-  },
-  topicsList: {
-    gap: 4,
-  },
-  topicPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  topicText: {
-    fontSize: 11,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  bottomBanner: {
-    marginHorizontal: 16,
-    marginTop: 30,
-    borderRadius: 24,
-    padding: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  bottomMascot: {
-    width: 75,
-    height: 75,
-  },
-  bottomBannerText: {
-    flex: 1,
-  },
-  bottomBannerTitle: {
-    color: '#fff',
-    fontSize: 17,
-    fontWeight: '900',
-    marginBottom: 4,
-  },
-  bottomBannerSub: {
-    color: 'rgba(255,255,255,0.9)',
-    fontSize: 12,
-    lineHeight: 16,
-    marginBottom: 12,
-  },
-  bannerActionBtn: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    alignSelf: 'flex-start',
-  },
-  bannerActionBtnText: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  footer: {
-    marginTop: 30,
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  footerText: {
-    fontSize: 11,
-    color: '#94A3B8',
   },
 });
