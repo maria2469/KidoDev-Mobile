@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,16 +8,17 @@ import {
   Image,
   Animated,
   Modal,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView } from 'react-native-webview';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
-import { RootStackParamList } from '../navigation/NavigationTypes';
+import { useAuth } from '../context/AuthContext';
+import { curriculum } from '../data/curriculum';
+import { evaluateCode, saveProgress, GradeResult } from '../utils/grader';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const isTablet = width >= 768;
 
 const BLOCKLY_HTML = `
@@ -68,7 +69,6 @@ const BLOCKLY_HTML = `
     .blocklyFlyout {
       border-right: 2px solid #E2E8F0;
     }
-    /* Scrollbars */
     ::-webkit-scrollbar {
       width: 4px;
       height: 4px;
@@ -82,51 +82,58 @@ const BLOCKLY_HTML = `
 <body>
   <div id="blocklyDiv"></div>
   <xml id="toolbox" style="display: none">
+    <category name="Events" colour="#FFD500">
+      <block type="s_when_flag"></block>
+      <block type="s_when_clicked"></block>
+    </category>
     <category name="Motion" colour="#4C97FF">
-      <block type="motion_movesteps">
+      <block type="s_move">
         <value name="STEPS">
-          <shadow type="math_number"><field name="NUM">10</field></shadow>
+          <shadow type="math_number"><field name="NUM">200</field></shadow>
         </value>
       </block>
-      <block type="motion_turnright">
+      <block type="s_change_y">
+        <value name="Y">
+          <shadow type="math_number"><field name="NUM">50</field></shadow>
+        </value>
+      </block>
+      <block type="s_change_x">
+        <value name="X">
+          <shadow type="math_number"><field name="NUM">50</field></shadow>
+        </value>
+      </block>
+      <block type="s_turn_r">
         <value name="DEGREES">
           <shadow type="math_number"><field name="NUM">15</field></shadow>
         </value>
       </block>
-      <block type="motion_turnleft">
+      <block type="s_turn_l">
         <value name="DEGREES">
           <shadow type="math_number"><field name="NUM">15</field></shadow>
         </value>
       </block>
     </category>
     <category name="Looks" colour="#9966FF">
-      <block type="looks_sayforsecs">
-        <value name="MESSAGE">
-          <shadow type="text"><field name="TEXT">Hello World!</field></shadow>
-        </value>
-        <value name="SECS">
-          <shadow type="math_number"><field name="NUM">2</field></shadow>
-        </value>
-      </block>
-      <block type="looks_say">
+      <block type="s_say">
         <value name="MESSAGE">
           <shadow type="text"><field name="TEXT">Hello!</field></shadow>
         </value>
       </block>
     </category>
     <category name="Sound" colour="#D65CD6">
-      <block type="sound_playuntildone">
+      <block type="s_play_sound">
         <field name="SOUND_MENU">Meow</field>
       </block>
     </category>
-    <category name="Events" colour="#FFD500">
-      <block type="event_whenflagclicked"></block>
-      <block type="event_whenthisspriteclicked"></block>
-    </category>
     <category name="Control" colour="#FFAB19">
-      <block type="control_repeat">
+      <block type="s_repeat">
         <value name="TIMES">
-          <shadow type="math_number"><field name="NUM">10</field></shadow>
+          <shadow type="math_number"><field name="NUM">5</field></shadow>
+        </value>
+      </block>
+      <block type="s_wait">
+        <value name="SECS">
+          <shadow type="math_number"><field name="NUM">1</field></shadow>
         </value>
       </block>
     </category>
@@ -135,20 +142,20 @@ const BLOCKLY_HTML = `
   <script>
     Blockly.defineBlocksWithJsonArray([
       {
-        "type": "event_whenflagclicked",
+        "type": "s_when_flag",
         "message0": "when %1 clicked",
         "args0": [{ "type": "field_image", "src": "https://img.icons8.com/color/48/flag.png", "width": 18, "height": 18, "alt": "flag" }],
         "nextStatement": null,
         "colour": "#FFBF00"
       },
       {
-        "type": "event_whenthisspriteclicked",
+        "type": "s_when_clicked",
         "message0": "when sprite clicked",
         "nextStatement": null,
         "colour": "#FFBF00"
       },
       {
-        "type": "motion_movesteps",
+        "type": "s_move",
         "message0": "move %1 steps",
         "args0": [{ "type": "input_value", "name": "STEPS", "check": "Number" }],
         "previousStatement": null,
@@ -156,7 +163,23 @@ const BLOCKLY_HTML = `
         "colour": "#4C97FF"
       },
       {
-        "type": "motion_turnright",
+        "type": "s_change_y",
+        "message0": "change y by %1",
+        "args0": [{ "type": "input_value", "name": "Y", "check": "Number" }],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": "#4C97FF"
+      },
+      {
+        "type": "s_change_x",
+        "message0": "change x by %1",
+        "args0": [{ "type": "input_value", "name": "X", "check": "Number" }],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": "#4C97FF"
+      },
+      {
+        "type": "s_turn_r",
         "message0": "turn right %1 deg",
         "args0": [{ "type": "input_value", "name": "DEGREES", "check": "Number" }],
         "previousStatement": null,
@@ -164,7 +187,7 @@ const BLOCKLY_HTML = `
         "colour": "#4C97FF"
       },
       {
-        "type": "motion_turnleft",
+        "type": "s_turn_l",
         "message0": "turn left %1 deg",
         "args0": [{ "type": "input_value", "name": "DEGREES", "check": "Number" }],
         "previousStatement": null,
@@ -172,28 +195,15 @@ const BLOCKLY_HTML = `
         "colour": "#4C97FF"
       },
       {
-        "type": "looks_sayforsecs",
-        "message0": "say %1 for %2s",
-        "args0": [
-          { "type": "input_value", "name": "MESSAGE" },
-          { "type": "input_value", "name": "SECS", "check": "Number" }
-        ],
-        "previousStatement": null,
-        "nextStatement": null,
-        "colour": "#9966FF"
-      },
-      {
-        "type": "looks_say",
+        "type": "s_say",
         "message0": "say %1",
-        "args0": [
-          { "type": "input_value", "name": "MESSAGE" }
-        ],
+        "args0": [{ "type": "input_value", "name": "MESSAGE" }],
         "previousStatement": null,
         "nextStatement": null,
         "colour": "#9966FF"
       },
       {
-        "type": "sound_playuntildone",
+        "type": "s_play_sound",
         "message0": "play sound %1",
         "args0": [
           {
@@ -207,13 +217,21 @@ const BLOCKLY_HTML = `
         "colour": "#D65CD6"
       },
       {
-        "type": "control_repeat",
+        "type": "s_repeat",
         "message0": "repeat %1 %2 %3",
         "args0": [
           { "type": "input_value", "name": "TIMES", "check": "Number" },
           { "type": "input_dummy" },
           { "type": "input_statement", "name": "DO" }
         ],
+        "previousStatement": null,
+        "nextStatement": null,
+        "colour": "#FFAB19"
+      },
+      {
+        "type": "s_wait",
+        "message0": "wait %1 secs",
+        "args0": [{ "type": "input_value", "name": "SECS", "check": "Number" }],
         "previousStatement": null,
         "nextStatement": null,
         "colour": "#FFAB19"
@@ -245,31 +263,37 @@ const BLOCKLY_HTML = `
         var blocks = workspace.getAllBlocks(false).map(function(b) { return b.type; });
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'WORKSPACE_CHANGE',
-          blockCount: blocks.length,
-          blocks: blocks
+          blockCount: blocks.length
         }));
       }
     });
 
     window.runCode = function() {
-      var blocks = workspace.getAllBlocks(false).map(function(b) { return b.type; });
+      var xmlDom = Blockly.Xml.workspaceToDom(workspace);
+      var xmlText = Blockly.Xml.domToText(xmlDom);
+      var blocks = workspace.getAllBlocks(false).map(function(b) {
+        var fields = {};
+        for (var i = 0; i < b.inputList.length; i++) {
+          var input = b.inputList[i];
+          for (var j = 0; j < input.fieldRow.length; j++) {
+            var f = input.fieldRow[j];
+            if (f.name) fields[f.name] = f.getValue();
+          }
+        }
+        return { type: b.type, fields: fields };
+      });
+
       if (window.ReactNativeWebView) {
         window.ReactNativeWebView.postMessage(JSON.stringify({
           type: 'RUN',
-          blocks: blocks
+          blocks: blocks,
+          xml: xmlText
         }));
       }
     };
 
     window.clearWorkspace = function() {
       workspace.clear();
-      if (window.ReactNativeWebView) {
-        window.ReactNativeWebView.postMessage(JSON.stringify({
-          type: 'WORKSPACE_CHANGE',
-          blockCount: 0,
-          blocks: []
-        }));
-      }
     };
   </script>
 </body>
@@ -280,10 +304,27 @@ export const MagicStudioScreen: React.FC = () => {
   const route = useRoute<any>();
   const navigation = useNavigation<any>();
   const { colors, assets } = useTheme();
+  const { childProfile } = useAuth();
 
-  const lessonId = route.params?.lessonId || 'level-1-1';
+  // Normalize lesson ID (e.g. L1P1 or level-1-1 -> L1P1)
+  const rawId = route.params?.lessonId || 'L1P1';
+  const lessonId = useMemo(() => {
+    const clean = String(rawId).toUpperCase();
+    const match = clean.match(/LEVEL-(\d+)-(\d+)/);
+    if (match) return `L${match[1]}P${match[2]}`;
+    return clean;
+  }, [rawId]);
+
+  // Find exact lesson definition from curriculum
+  const lesson = useMemo(() => {
+    for (const lvl of curriculum) {
+      const found = lvl.projects.find((p) => p.id === lessonId);
+      if (found) return found;
+    }
+    return curriculum[0].projects[0];
+  }, [lessonId]);
+
   const webViewRef = useRef<WebView>(null);
-
   const [isRunning, setIsRunning] = useState(false);
   const [speechBubble, setSpeechBubble] = useState<string | null>(null);
   const [blockCount, setBlockCount] = useState(0);
@@ -291,10 +332,9 @@ export const MagicStudioScreen: React.FC = () => {
 
   const spriteX = useRef(new Animated.Value(0)).current;
   const spriteRotate = useRef(new Animated.Value(0)).current;
+
+  const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
-  const [helpMessage] = useState(
-    "Snap 'when flag clicked' on the right canvas, then attach 'move 10 steps'!"
-  );
 
   useEffect(() => {
     const id = spriteX.addListener(({ value }) => {
@@ -305,11 +345,11 @@ export const MagicStudioScreen: React.FC = () => {
     };
   }, [spriteX]);
 
-  const handleMessage = (event: any) => {
+  const handleMessage = async (event: any) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
       if (data.type === 'RUN') {
-        executeBlocks(data.blocks);
+        await executeAndGrade(data.blocks, data.xml);
       } else if (data.type === 'WORKSPACE_CHANGE') {
         setBlockCount(data.blockCount || 0);
       }
@@ -318,38 +358,60 @@ export const MagicStudioScreen: React.FC = () => {
     }
   };
 
-  const executeBlocks = (blocks: string[]) => {
+  const executeAndGrade = async (blocks: any[], xml: string) => {
     setIsRunning(true);
     setSpeechBubble(null);
 
-    // Sequence execution: animate sprite on the top live stage
+    // 1. Grade the code using the exact web version grading engine
+    const grade = await evaluateCode(lessonId, blocks, xml);
+    setGradeResult(grade);
+
+    // 2. Persist to database (lesson_completions & child_profiles)
+    if (childProfile?.id && grade.score > 0) {
+      saveProgress({
+        childId: childProfile.id,
+        lessonId,
+        score: grade.score,
+        badge: grade.badge,
+        xpEarned: grade.xpEarned,
+      });
+    }
+
+    // 3. Animate Sprite on top Live Stage
+    const moveAmount = grade.score >= 40 ? 70 : 25;
+
     Animated.sequence([
       Animated.timing(spriteX, {
-        toValue: 60,
+        toValue: moveAmount,
         duration: 700,
         useNativeDriver: true,
       }),
       Animated.timing(spriteRotate, {
-        toValue: 1,
+        toValue: grade.score >= 70 ? 1 : 0.5,
         duration: 350,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      setSpeechBubble('Hello World!');
+      if (grade.score >= 80) {
+        setSpeechBubble('Yum! Reached the dinner bowl!');
+      } else if (grade.score >= 40) {
+        setSpeechBubble('Almost there!');
+      } else {
+        setSpeechBubble('Hmm, need more steps!');
+      }
+
       setIsRunning(false);
 
-      // Trigger win celebration modal after 1.5s
+      // Trigger completion modal after brief delay
       setTimeout(() => {
         setShowCompleteModal(true);
-      }, 1500);
+      }, 1200);
     });
   };
 
   const handleGreenFlag = () => {
     if (webViewRef.current) {
       webViewRef.current.injectJavaScript('window.runCode(); true;');
-    } else {
-      executeBlocks([]);
     }
   };
 
@@ -377,12 +439,14 @@ export const MagicStudioScreen: React.FC = () => {
       <View style={[styles.topBar, { backgroundColor: colors.navbar_bg }]}>
         <TouchableOpacity style={styles.topBackBtn} onPress={() => navigation.goBack()}>
           <FontAwesome5 name="arrow-left" size={13} color="#fff" />
-          <Text style={styles.topBackText}>Levels</Text>
+          <Text style={styles.topBackText}>Quests</Text>
         </TouchableOpacity>
 
         <View style={styles.lessonTitleWrap}>
           <FontAwesome5 name="gamepad" size={12} color="#FFD000" />
-          <Text style={styles.lessonTitleText}>{lessonId.toUpperCase()}</Text>
+          <Text style={styles.lessonTitleText} numberOfLines={1}>
+            {lessonId}: {lesson.title}
+          </Text>
         </View>
 
         {/* TOPBAR RUN / STOP CONTROLS */}
@@ -444,7 +508,6 @@ export const MagicStudioScreen: React.FC = () => {
 
           {/* Stage Screen Box */}
           <View style={styles.stageCanvasBox}>
-            {/* Stage Horizon / Floor line */}
             <View style={styles.stageFloorLine} />
 
             {/* SPEECH BUBBLE */}
@@ -476,13 +539,13 @@ export const MagicStudioScreen: React.FC = () => {
             </View>
           </View>
 
-          {/* AI TUTOR HINT (Compact single line) */}
+          {/* AI TUTOR HINT: EXACT MISSION OBJECTIVE FROM CURRICULUM */}
           <View style={styles.tutorHintBar}>
             <View style={styles.tutorIconWrap}>
               <FontAwesome5 name="lightbulb" size={11} color="#8B5CF6" />
             </View>
             <Text style={styles.tutorMessage} numberOfLines={1}>
-              {helpMessage}
+              {lesson.steps?.[0]?.desc || lesson.objective || "Snap 'when flag clicked' then attach 'move 200 steps'!"}
             </Text>
           </View>
         </View>
@@ -494,7 +557,7 @@ export const MagicStudioScreen: React.FC = () => {
           <View style={styles.dividerColLeft}>
             <FontAwesome5 name="puzzle-piece" size={11} color="#3B82F6" />
             <Text style={styles.dividerColTitle}>BLOCKS</Text>
-            <Text style={styles.dividerColSub}>(Left Drawer)</Text>
+            <Text style={styles.dividerColSub}>(Palette)</Text>
           </View>
 
           <View style={styles.dividerCenterPill}>
@@ -504,13 +567,12 @@ export const MagicStudioScreen: React.FC = () => {
           <View style={styles.dividerColRight}>
             <FontAwesome5 name="code" size={11} color="#10B981" />
             <Text style={styles.dividerColTitle}>CODE EDITOR</Text>
-            <Text style={styles.dividerColSub}>(Right Canvas)</Text>
+            <Text style={styles.dividerColSub}>(Canvas)</Text>
           </View>
         </View>
 
         {/* ============================================================ */}
         {/* BOTTOM HALF: BLOCKLY WORKSPACE                               */}
-        {/* (Blocks Palette on bottom-left, Code Canvas on bottom-right)  */}
         {/* ============================================================ */}
         <View style={styles.workspacePane}>
           <WebView
@@ -525,35 +587,81 @@ export const MagicStudioScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* LEVEL COMPLETE WIN MODAL */}
+      {/* LEVEL COMPLETE WIN MODAL (EXACT WEB CRITERIA & SCORING) */}
       <Modal visible={showCompleteModal} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.winCard}>
-            <View style={styles.winTrophyCircle}>
-              <FontAwesome5 name="trophy" size={36} color="#FFD000" />
+            <View
+              style={[
+                styles.winTrophyCircle,
+                { backgroundColor: (gradeResult?.score || 0) >= 70 ? '#FEF9C3' : '#F1F5F9' },
+              ]}
+            >
+              <FontAwesome5
+                name={(gradeResult?.score || 0) >= 40 ? 'trophy' : 'redo'}
+                size={34}
+                color={(gradeResult?.score || 0) >= 70 ? '#FFD000' : '#64748B'}
+              />
             </View>
-            <Text style={styles.winTitle}>Quest Complete!</Text>
-            <Text style={styles.winSubtitle}>You mastered Motion & Movement blocks!</Text>
 
+            <Text style={styles.winTitle}>
+              {(gradeResult?.score || 0) >= 40 ? 'Quest Complete!' : 'Try Again!'}
+            </Text>
+
+            {/* SCORE PERCENTAGE */}
+            <View style={styles.scorePill}>
+              <Text style={styles.scorePillText}>
+                Score: {gradeResult?.score || 0}% • {gradeResult?.badge || 'Participant'}
+              </Text>
+            </View>
+
+            {/* 3 STAR RATING ROW */}
             <View style={styles.winStarsRow}>
-              <FontAwesome5 name="star" size={28} color="#FFD000" />
-              <FontAwesome5 name="star" size={36} color="#FFD000" />
-              <FontAwesome5 name="star" size={28} color="#FFD000" />
+              <FontAwesome5
+                name="star"
+                size={28}
+                color={(gradeResult?.stars || 0) >= 1 ? '#FFD000' : '#E2E8F0'}
+                solid={(gradeResult?.stars || 0) >= 1}
+              />
+              <FontAwesome5
+                name="star"
+                size={36}
+                color={(gradeResult?.stars || 0) >= 2 ? '#FFD000' : '#E2E8F0'}
+                solid={(gradeResult?.stars || 0) >= 2}
+              />
+              <FontAwesome5
+                name="star"
+                size={28}
+                color={(gradeResult?.stars || 0) >= 3 ? '#FFD000' : '#E2E8F0'}
+                solid={(gradeResult?.stars || 0) >= 3}
+              />
             </View>
 
-            <View style={styles.winXpPill}>
-              <Text style={styles.winXpText}>+50 XP EARNED</Text>
-            </View>
+            {/* XP REWARD BADGE */}
+            {(gradeResult?.xpEarned || 0) > 0 && (
+              <View style={styles.winXpPill}>
+                <FontAwesome5 name="bolt" size={11} color="#D97706" />
+                <Text style={styles.winXpText}>+{gradeResult?.xpEarned} XP EARNED</Text>
+              </View>
+            )}
+
+            {/* AI TUTOR FEEDBACK */}
+            <Text style={styles.winSubtitle}>{gradeResult?.feedback}</Text>
 
             <TouchableOpacity
-              style={[styles.nextLevelBtn, { backgroundColor: colors.primary }]}
+              style={[
+                styles.nextLevelBtn,
+                { backgroundColor: (gradeResult?.score || 0) >= 40 ? colors.primary : '#3B82F6' },
+              ]}
               onPress={() => {
                 setShowCompleteModal(false);
                 navigation.navigate('Levels');
               }}
             >
-              <Text style={styles.nextLevelBtnText}>CONTINUE ADVENTURE</Text>
-              <FontAwesome5 name="arrow-right" size={14} color="#fff" />
+              <Text style={styles.nextLevelBtnText}>
+                {(gradeResult?.score || 0) >= 40 ? 'CONTINUE ADVENTURE' : 'RETRY MISSION'}
+              </Text>
+              <FontAwesome5 name="arrow-right" size={13} color="#fff" />
             </TouchableOpacity>
           </View>
         </View>
@@ -593,15 +701,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+    maxWidth: width * 0.45,
   },
   lessonTitleText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   runControls: {
     flexDirection: 'row',
@@ -631,14 +740,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 3,
   },
-
-  /* MAIN COMBINED CONTAINER */
   mainContainer: {
     flex: 1,
     flexDirection: 'column',
   },
-
-  /* TOP HALF: LIVE STAGE */
   stagePane: {
     height: isTablet ? 320 : 230,
     backgroundColor: '#FFFFFF',
@@ -723,8 +828,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
   },
-
-  /* STAGE CANVAS BOX */
   stageCanvasBox: {
     flex: 1,
     backgroundColor: '#F0F9FF',
@@ -803,8 +906,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0284C7',
   },
-
-  /* AI TUTOR HINT BAR */
   tutorHintBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -831,8 +932,6 @@ const styles = StyleSheet.create({
     color: '#6B21A8',
     fontWeight: '700',
   },
-
-  /* DIVIDER BAR BETWEEN LIVE STAGE AND BLOCKS/WORKSPACE */
   workspaceDividerBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -877,8 +976,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
   },
-
-  /* BOTTOM HALF: WORKSPACE PANE */
   workspacePane: {
     flex: 1,
     backgroundColor: '#FFFFFF',
@@ -887,11 +984,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-
-  /* LEVEL COMPLETE WIN MODAL */
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
@@ -909,35 +1004,51 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: '#FEF9C3',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   winTitle: {
     fontSize: 20,
     fontWeight: '900',
     color: '#0F172A',
   },
+  scorePill: {
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 10,
+    marginTop: 6,
+    marginBottom: 10,
+  },
+  scorePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#4F46E5',
+  },
   winSubtitle: {
     fontSize: 12,
-    color: '#64748B',
+    color: '#475569',
     textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 14,
+    marginTop: 6,
+    marginBottom: 16,
+    lineHeight: 16,
   },
   winStarsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 12,
   },
   winXpPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     backgroundColor: '#FEF3C7',
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 12,
-    marginBottom: 16,
+    marginBottom: 8,
   },
   winXpText: {
     color: '#D97706',
